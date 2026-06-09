@@ -39,6 +39,7 @@ const LedgerEntrySchema: Schema = new Schema(
 
 LedgerEntrySchema.index({ userId: 1, bucketId: 1, date: -1 });
 LedgerEntrySchema.index({ userId: 1, date: -1 });
+LedgerEntrySchema.index({ userId: 1, createdAt: -1 });
 LedgerEntrySchema.index({ userId: 1, referenceId: 1 });
 LedgerEntrySchema.index({ userId: 1, bucketId: 1, createdAt: -1 });
 LedgerEntrySchema.index({ userId: 1, entryType: 1 });

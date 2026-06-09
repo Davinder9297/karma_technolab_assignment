@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { reconciliationSchema } from "../validators";
 import { ReconciliationService } from "../services/reconciliationService";
 import ReconciliationRun from "../models/ReconciliationRun";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 
 export class ReconciliationController {
   static async run(req: Request, res: Response) {
@@ -26,11 +26,26 @@ export class ReconciliationController {
 
   static async getHistory(req: Request, res: Response) {
     try {
-      const { limit = 10 } = req.query;
-      const history = await ReconciliationRun.find({ userId: DEMO_USER_ID })
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT } = req.query;
+      const query = { userId: DEMO_USER_ID };
+
+      const history = await ReconciliationRun.find(query)
         .sort({ createdAt: -1 })
+        .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));
-      res.json({ success: true, data: history });
+
+      const total = await ReconciliationRun.countDocuments(query);
+
+      res.json({ 
+        success: true, 
+        data: history,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit))
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

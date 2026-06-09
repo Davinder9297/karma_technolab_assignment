@@ -35,6 +35,7 @@ export class IncomeService {
         status: IncomeStatus.ACTIVE,
         allocations: splits.map((s) => ({
           bucketId: s.bucketId,
+          bucketName: s.bucketName,
           amount: s.amount,
           ruleType: s.ruleType,
           ruleValue: s.ruleValue,
@@ -82,7 +83,12 @@ export class IncomeService {
       }
 
       await session.commitTransaction();
-      return income;
+      
+      // Fetch with population to ensure the UI has all names
+      const populatedIncome = await Income.findById(income._id)
+        .populate("incomeTypeId", "name")
+        .populate("allocations.bucketId", "name");
+      return populatedIncome || income;
     } catch (error) {
       await session.abortTransaction();
       throw error;

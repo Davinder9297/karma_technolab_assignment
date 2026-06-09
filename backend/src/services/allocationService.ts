@@ -37,20 +37,21 @@ export class AllocationService {
     const percentageRules = rule.rules.filter((r: any) => r.ruleType === RuleType.PERCENTAGE);
 
     // Fetch bucket names for results - Ensure we only use ACTIVE buckets
-    const bucketIds = rule.rules.map((r: any) => r.bucketId);
+    const bucketIds = rule.rules.map((r: any) => r.bucketId.toString());
+    const uniqueBucketIds = [...new Set(bucketIds)];
     const buckets = await Bucket.find({ 
-      _id: { $in: bucketIds },
+      _id: { $in: uniqueBucketIds },
       userId,
       isActive: true 
     });
     
-    if (buckets.length !== bucketIds.length) {
-      const foundBucketIds = buckets.map(b => b._id.toString());
-      const missingBucketIds = bucketIds.filter((id: any) => !foundBucketIds.includes(id.toString()));
+    const bucketMap = new Map(buckets.map((b) => [b._id.toString(), b.name]));
+
+    // Check for missing or inactive buckets
+    const missingBucketIds = uniqueBucketIds.filter(id => !bucketMap.has(id));
+    if (missingBucketIds.length > 0) {
       throw new Error(`One or more buckets in the allocation rule are inactive or deleted: ${missingBucketIds.join(", ")}`);
     }
-
-    const bucketMap = new Map(buckets.map((b) => [b._id.toString(), b.name]));
 
     // 1. Apply FIXED rules
     for (const r of fixedRules) {

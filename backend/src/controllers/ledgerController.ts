@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
 import LedgerEntry from "../models/LedgerEntry";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 
 export class LedgerController {
   static async getAll(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 50, bucketId, entryType, transactionType, startDate, endDate } = req.query;
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT, bucketId, entryType, transactionType, startDate, endDate } = req.query;
       const query: any = { userId: DEMO_USER_ID };
       
       if (bucketId) query.bucketId = bucketId;
@@ -19,7 +19,8 @@ export class LedgerController {
       }
 
       const entries = await LedgerEntry.find(query)
-        .sort({ date: -1, createdAt: -1 })
+        // Show newest inserted ledger rows first, even for backdated transactions.
+        .sort({ createdAt: -1, _id: -1, date: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit))
         .populate("bucketId", "name")

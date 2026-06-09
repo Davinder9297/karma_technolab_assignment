@@ -3,16 +3,26 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Edit2, Filter } from "lucide-react";
 import api from "@/lib/api";
+import { DEFAULT_PAGE_LIMIT, LOOKUP_LIST_LIMIT } from "@/lib/constants";
 import { Expense, Bucket, ExpenseStatus } from "@/types";
 import { toast } from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
+import Spinner from "@/components/ui/Spinner";
+import Pagination from "@/components/ui/Pagination";
 import { clsx } from "clsx";
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: DEFAULT_PAGE_LIMIT,
+    total: 0,
+    pages: 0
+  });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   
@@ -34,14 +44,15 @@ export default function ExpensesPage() {
   }, []);
 
   useEffect(() => {
-    fetchExpenses();
-  }, [filterBucket]);
+    fetchExpenses(pagination.page);
+  }, [filterBucket, pagination.page]);
 
   const fetchInitialData = async () => {
+    setLoading(true);
     try {
-      const bRes = await api.get("/buckets");
+      const bRes = await api.get(`/buckets?limit=${LOOKUP_LIST_LIMIT}`);
       setBuckets(bRes.data.data);
-      fetchExpenses();
+      fetchExpenses(1);
     } catch (error) {
       toast.error("Failed to fetch initial data");
     } finally {
@@ -49,19 +60,28 @@ export default function ExpensesPage() {
     }
   };
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = async (page: number) => {
+    setLoading(true);
     try {
       const response = await api.get("/expenses", {
-        params: { bucketId: filterBucket }
+        params: { 
+          bucketId: filterBucket,
+          page,
+          limit: pagination.limit
+        }
       });
       setExpenses(response.data.data);
+      setPagination(response.data.pagination);
     } catch (error) {
       toast.error("Failed to fetch expenses");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       await api.post("/expenses", {
         ...formData,
@@ -74,20 +94,26 @@ export default function ExpensesPage() {
         date: new Date().toISOString().split('T')[0],
         description: ""
       });
-      fetchExpenses();
+      fetchExpenses(1);
+      setPagination(prev => ({ ...prev, page: 1 }));
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to add expense");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this expense? This will create a reversal ledger entry.")) return;
+    setLoading(true);
     try {
       await api.delete(`/expenses/${id}`);
       toast.success("Expense deleted successfully");
-      fetchExpenses();
+      fetchExpenses(pagination.page);
     } catch (error) {
       toast.error("Failed to delete expense");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -104,6 +130,7 @@ export default function ExpensesPage() {
     e.preventDefault();
     if (!editingExpense) return;
 
+    setSubmitting(true);
     try {
       await api.patch(`/expenses/${editingExpense._id}`, {
         amount: parseFloat(editFormData.amount),
@@ -111,11 +138,13 @@ export default function ExpensesPage() {
       });
       toast.success("Expense updated successfully");
       setIsEditModalOpen(false);
-      fetchExpenses();
+      fetchExpenses(pagination.page);
       // Also refresh buckets for dashboard/balance updates
       fetchInitialData();
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to update expense");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -186,16 +215,29 @@ export default function ExpensesPage() {
           <div className="lg:col-span-4 flex justify-end">
             <button
               type="submit"
-              className="bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-100"
+              disabled={submitting}
+              className="bg-red-600 text-white px-8 py-2.5 rounded-lg font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-100 disabled:opacity-50 flex items-center"
             >
-              Record Expense
+              {submitting ? (
+                <>
+                  <Spinner size="sm" light className="mr-2" />
+                  Recording...
+                </>
+              ) : (
+                "Record Expense"
+              )}
             </button>
           </div>
         </form>
       </div>
 
       {/* Expenses Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[400px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+            <Spinner size="lg" />
+          </div>
+        )}
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
           <h3 className="font-bold text-slate-800">Recent Expenses</h3>
           <div className="flex items-center space-x-2">
@@ -203,7 +245,10 @@ export default function ExpensesPage() {
             <select
               className="text-xs font-bold text-slate-500 uppercase bg-transparent outline-none cursor-pointer"
               value={filterBucket}
-              onChange={(e) => setFilterBucket(e.target.value)}
+              onChange={(e) => {
+                setFilterBucket(e.target.value);
+                setPagination(prev => ({ ...prev, page: 1 }));
+              }}
             >
               <option value="">All Buckets</option>
               {buckets.map(b => (
@@ -273,7 +318,15 @@ export default function ExpensesPage() {
             ))}
           </tbody>
         </table>
+
+        <Pagination 
+          currentPage={pagination.page}
+          totalPages={pagination.pages}
+          onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          isLoading={loading}
+        />
       </div>
+
       <Modal 
         isOpen={isEditModalOpen} 
         onClose={() => setIsEditModalOpen(false)} 
@@ -303,9 +356,17 @@ export default function ExpensesPage() {
           </div>
           <button 
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors mt-4"
+            disabled={submitting}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors mt-4 flex items-center justify-center disabled:opacity-50"
           >
-            Update Expense
+            {submitting ? (
+              <>
+                <Spinner size="sm" light className="mr-2" />
+                Updating...
+              </>
+            ) : (
+              "Update Expense"
+            )}
           </button>
         </form>
       </Modal>

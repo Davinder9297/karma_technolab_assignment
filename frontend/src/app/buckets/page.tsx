@@ -3,25 +3,37 @@
 import { useEffect, useState } from "react";
 import { Plus, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
 import api from "@/lib/api";
+import { DEFAULT_PAGE_LIMIT } from "@/lib/constants";
 import { Bucket } from "@/types";
 import Modal from "@/components/ui/Modal";
+import Spinner from "@/components/ui/Spinner";
+import Pagination from "@/components/ui/Pagination";
 import { toast } from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
 
 export default function BucketsPage() {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: DEFAULT_PAGE_LIMIT,
+    total: 0,
+    pages: 0
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", description: "" });
 
   useEffect(() => {
-    fetchBuckets();
-  }, []);
+    fetchBuckets(pagination.page);
+  }, [pagination.page]);
 
-  const fetchBuckets = async () => {
+  const fetchBuckets = async (page: number) => {
+    setLoading(true);
     try {
-      const response = await api.get("/buckets");
+      const response = await api.get(`/buckets?page=${page}&limit=${pagination.limit}`);
       setBuckets(response.data.data);
+      setPagination(response.data.pagination);
     } catch (error) {
       toast.error("Failed to fetch buckets");
     } finally {
@@ -31,24 +43,31 @@ export default function BucketsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       await api.post("/buckets", formData);
       toast.success("Bucket created successfully");
       setIsModalOpen(false);
       setFormData({ name: "", description: "" });
-      fetchBuckets();
+      fetchBuckets(1);
+      setPagination(prev => ({ ...prev, page: 1 }));
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to create bucket");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const toggleActive = async (id: string, currentStatus: boolean) => {
+    setLoading(true);
     try {
       await api.patch(`/buckets/${id}`, { isActive: !currentStatus });
       toast.success("Status updated");
-      fetchBuckets();
+      fetchBuckets(pagination.page);
     } catch (error) {
       toast.error("Failed to update status");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,7 +92,12 @@ export default function BucketsPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[400px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+            <Spinner size="lg" />
+          </div>
+        )}
         <table className="w-full text-left">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-xs font-bold">
             <tr>
@@ -116,6 +140,13 @@ export default function BucketsPage() {
             ))}
           </tbody>
         </table>
+
+        <Pagination 
+          currentPage={pagination.page}
+          totalPages={pagination.pages}
+          onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          isLoading={loading}
+        />
       </div>
 
       <Modal 
@@ -145,9 +176,17 @@ export default function BucketsPage() {
           </div>
           <button 
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors mt-4"
+            disabled={submitting}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors mt-4 flex items-center justify-center disabled:opacity-50"
           >
-            Create Bucket
+            {submitting ? (
+              <>
+                <Spinner size="sm" light className="mr-2" />
+                Creating...
+              </>
+            ) : (
+              "Create Bucket"
+            )}
           </button>
         </form>
       </Modal>

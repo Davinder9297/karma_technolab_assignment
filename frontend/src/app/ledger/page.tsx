@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import { Filter, Calendar, BookText, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import api from "@/lib/api";
+import { DEFAULT_PAGE_LIMIT, INDIA_TIME_ZONE, LOOKUP_LIST_LIMIT } from "@/lib/constants";
 import { LedgerEntry, Bucket, EntryType, TransactionType } from "@/types";
 import { toast } from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
+import Spinner from "@/components/ui/Spinner";
+import Pagination from "@/components/ui/Pagination";
 import { clsx } from "clsx";
 
 export default function LedgerPage() {
@@ -19,31 +22,37 @@ export default function LedgerPage() {
     startDate: "",
     endDate: ""
   });
-  const [pagination, setPagination] = useState({ page: 1, pages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0, limit: DEFAULT_PAGE_LIMIT });
 
   useEffect(() => {
     fetchBuckets();
-    fetchLedger();
+  }, []);
+
+  useEffect(() => {
+    fetchLedger(pagination.page);
   }, [filters, pagination.page]);
 
   const fetchBuckets = async () => {
     try {
-      const response = await api.get("/buckets");
+      const response = await api.get(`/buckets?limit=${LOOKUP_LIST_LIMIT}`);
       setBuckets(response.data.data);
     } catch (error) {
       console.error("Failed to fetch buckets");
     }
   };
 
-  const fetchLedger = async () => {
+  const fetchLedger = async (page: number) => {
+    setLoading(true);
     try {
       const response = await api.get("/ledger", {
-        params: { ...filters, page: pagination.page }
+        params: { ...filters, page, limit: pagination.limit }
       });
       setEntries(response.data.data);
       setPagination({
         page: response.data.pagination.page,
-        pages: response.data.pagination.pages
+        pages: response.data.pagination.pages,
+        total: response.data.pagination.total,
+        limit: response.data.pagination.limit
       });
     } catch (error) {
       toast.error("Failed to fetch ledger");
@@ -57,6 +66,15 @@ export default function LedgerPage() {
       style: "currency",
       currency: "INR",
     }).format(paise / 100);
+  };
+
+  const formatIndianDateTime = (value: string) => {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: INDIA_TIME_ZONE,
+      dateStyle: "medium",
+      timeStyle: "medium",
+      hour12: true,
+    }).format(new Date(value));
   };
 
   if (loading) return <div>Loading...</div>;
@@ -131,7 +149,12 @@ export default function LedgerPage() {
       </div>
 
       {/* Ledger Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[400px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+            <Spinner size="lg" />
+          </div>
+        )}
         <table className="w-full text-left">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
             <tr>
@@ -141,7 +164,6 @@ export default function LedgerPage() {
               <th className="px-6 py-4">Entry</th>
               <th className="px-6 py-4">Description</th>
               <th className="px-6 py-4 text-right">Amount</th>
-              <th className="px-6 py-4 text-right">Balance After</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -151,7 +173,7 @@ export default function LedgerPage() {
                 entry.transactionType === TransactionType.CREDIT ? "bg-green-50/20" : "bg-red-50/20"
               )}>
                 <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
-                  {new Date(entry.date).toLocaleString()}
+                  {formatIndianDateTime(entry.createdAt)}
                 </td>
                 <td className="px-6 py-4 font-semibold text-slate-900 text-sm">
                   {entry.bucketId?.name}
@@ -184,43 +206,17 @@ export default function LedgerPage() {
                     {entry.transactionType === TransactionType.CREDIT ? "+" : "-"}{formatCurrency(entry.amount)}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <span className={clsx(
-                    "text-sm font-bold",
-                    entry.balanceAfter >= 0 ? "text-slate-900" : "text-red-600"
-                  )}>
-                    {formatCurrency(entry.balanceAfter)}
-                  </span>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-            <p className="text-xs text-slate-500 font-medium">
-              Page {pagination.page} of {pagination.pages}
-            </p>
-            <div className="flex space-x-2">
-              <button
-                disabled={pagination.page === 1}
-                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                className="px-3 py-1 border border-slate-200 rounded text-xs font-bold hover:bg-white disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                disabled={pagination.page === pagination.pages}
-                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                className="px-3 py-1 border border-slate-200 rounded text-xs font-bold hover:bg-white disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination 
+          currentPage={pagination.page}
+          totalPages={pagination.pages}
+          onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          isLoading={loading}
+        />
       </div>
     </div>
   );

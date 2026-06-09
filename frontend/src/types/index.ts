@@ -68,6 +68,7 @@ export interface Income {
   status: IncomeStatus;
   allocations: {
     bucketId: string | null;
+    bucketName: string;
     amount: number;
     ruleType: RuleType;
     ruleValue: number;
@@ -93,6 +94,7 @@ export interface LedgerEntry {
   amount: number;
   balanceAfter: number;
   date: string;
+  createdAt: string;
   description: string;
   referenceModel: string;
   allocationRuleVersion?: number;

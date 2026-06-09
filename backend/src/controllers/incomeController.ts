@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { incomeSchema } from "../validators";
 import { IncomeService } from "../services/incomeService";
 import Income from "../models/Income";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 
 export class IncomeController {
   static async create(req: Request, res: Response) {
@@ -26,7 +26,7 @@ export class IncomeController {
 
   static async getAll(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 20, incomeTypeId, startDate, endDate } = req.query;
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT, incomeTypeId, startDate, endDate } = req.query;
       const query: any = { userId: DEMO_USER_ID };
       
       if (incomeTypeId) query.incomeTypeId = incomeTypeId;
@@ -40,7 +40,8 @@ export class IncomeController {
         .sort({ date: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit))
-        .populate("incomeTypeId", "name");
+        .populate("incomeTypeId", "name")
+        .populate("allocations.bucketId", "name");
 
       const total = await Income.countDocuments(query);
 

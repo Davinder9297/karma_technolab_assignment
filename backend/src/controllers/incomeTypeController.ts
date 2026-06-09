@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import IncomeType from "../models/IncomeType";
 import { incomeTypeSchema } from "../validators";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 
 export class IncomeTypeController {
   static async create(req: Request, res: Response) {
@@ -20,8 +20,26 @@ export class IncomeTypeController {
 
   static async getAll(req: Request, res: Response) {
     try {
-      const incomeTypes = await IncomeType.find({ userId: DEMO_USER_ID, isActive: true });
-      res.json({ success: true, data: incomeTypes });
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT } = req.query;
+      const query = { userId: DEMO_USER_ID, isActive: true };
+
+      const incomeTypes = await IncomeType.find(query)
+        .sort({ name: 1 })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit));
+
+      const total = await IncomeType.countDocuments(query);
+
+      res.json({ 
+        success: true, 
+        data: incomeTypes,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit))
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

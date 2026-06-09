@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import Bucket from "../models/Bucket";
 import BucketBalance from "../models/BucketBalance";
 import { bucketSchema } from "../validators";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 
 export class BucketController {
   static async create(req: Request, res: Response) {
@@ -42,6 +42,9 @@ export class BucketController {
 
   static async getAll(req: Request, res: Response) {
     try {
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT } = req.query;
+      const skip = (Number(page) - 1) * Number(limit);
+
       const buckets = await Bucket.aggregate([
         { 
           $match: { 
@@ -49,6 +52,9 @@ export class BucketController {
             isActive: true 
           } 
         },
+        { $sort: { name: 1 } },
+        { $skip: skip },
+        { $limit: Number(limit) },
         {
           $lookup: {
             from: "bucketbalances",
@@ -59,7 +65,22 @@ export class BucketController {
         },
         { $unwind: { path: "$balance", preserveNullAndEmptyArrays: true } }
       ]);
-      res.json({ success: true, data: buckets });
+
+      const total = await Bucket.countDocuments({ 
+        userId: DEMO_USER_ID, 
+        isActive: true 
+      });
+
+      res.json({ 
+        success: true, 
+        data: buckets,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit))
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

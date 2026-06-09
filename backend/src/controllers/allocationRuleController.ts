@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Request, Response } from "express";
 import AllocationRule from "../models/AllocationRule";
 import { allocationRuleSchema } from "../validators";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 import { RuleType } from "../types";
 
 export class AllocationRuleController {
@@ -76,11 +76,29 @@ export class AllocationRuleController {
   static async getByIncomeType(req: Request, res: Response) {
     try {
       const { incomeTypeId } = req.params;
-      const rules = await AllocationRule.find({
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT } = req.query;
+      const query = {
         userId: DEMO_USER_ID,
         incomeTypeId
-      }).sort({ version: -1 });
-      res.json({ success: true, data: rules });
+      };
+
+      const rules = await AllocationRule.find(query)
+        .sort({ version: -1 })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit));
+
+      const total = await AllocationRule.countDocuments(query);
+
+      res.json({ 
+        success: true, 
+        data: rules,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit))
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

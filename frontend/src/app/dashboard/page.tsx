@@ -6,6 +6,7 @@ import StatCard from "@/components/ui/StatCard";
 import api from "@/lib/api";
 import { DashboardBucket } from "@/types";
 import Badge from "@/components/ui/Badge";
+import Spinner from "@/components/ui/Spinner";
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardBucket[]>([]);
@@ -13,6 +14,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const response = await api.get("/dashboard/buckets");
         setData(response.data.data);
@@ -37,7 +39,13 @@ export default function Dashboard() {
   const totalExpenseMonth = data.reduce((sum, item) => sum + item.thisMonth.debits, 0);
   const negativeBuckets = data.filter((item) => item.balance.currentBalance < 0).length;
 
-  if (loading) return <div>Loading dashboard...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

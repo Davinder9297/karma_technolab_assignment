@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import { RefreshCcw, Database, CheckCircle2, AlertCircle, History, ChevronDown, ChevronUp } from "lucide-react";
 import api from "@/lib/api";
+import { DEFAULT_PAGE_LIMIT } from "@/lib/constants";
 import { ReconciliationRun } from "@/types";
 import { toast } from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
+import Spinner from "@/components/ui/Spinner";
+import Pagination from "@/components/ui/Pagination";
 import { clsx } from "clsx";
 
 export default function ReconciliationPage() {
@@ -14,6 +17,12 @@ export default function ReconciliationPage() {
   const [loading, setLoading] = useState(true);
   const [rebuilding, setRebuilding] = useState(false);
   const [running, setRunning] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: DEFAULT_PAGE_LIMIT,
+    total: 0,
+    pages: 0
+  });
   
   const [selectedMonth, setSelectedMonth] = useState({
     year: new Date().getFullYear(),
@@ -21,13 +30,15 @@ export default function ReconciliationPage() {
   });
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    fetchHistory(pagination.page);
+  }, [pagination.page]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (page: number) => {
+    setLoading(true);
     try {
-      const response = await api.get("/reconciliation/history");
+      const response = await api.get(`/reconciliation/history?page=${page}&limit=${pagination.limit}`);
       setHistory(response.data.data);
+      setPagination(response.data.pagination);
     } catch (error) {
       toast.error("Failed to fetch history");
     } finally {
@@ -41,7 +52,8 @@ export default function ReconciliationPage() {
       const response = await api.post("/reconciliation/run", selectedMonth);
       setCurrentRun(response.data.data);
       toast.success("Reconciliation completed");
-      fetchHistory();
+      fetchHistory(1);
+      setPagination(prev => ({ ...prev, page: 1 }));
     } catch (error) {
       toast.error("Failed to run reconciliation");
     } finally {
@@ -56,7 +68,8 @@ export default function ReconciliationPage() {
       const response = await api.post("/reconciliation/rebuild");
       setCurrentRun(response.data.reconciliation);
       toast.success("All balances rebuilt successfully");
-      fetchHistory();
+      fetchHistory(1);
+      setPagination(prev => ({ ...prev, page: 1 }));
     } catch (error) {
       toast.error("Failed to rebuild balances");
     } finally {
@@ -188,7 +201,12 @@ export default function ReconciliationPage() {
         <h3 className="text-lg font-bold text-slate-700 flex items-center">
           <History className="h-5 w-5 mr-2" /> Reconciliation History
         </h3>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden relative min-h-[300px]">
+          {loading && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+              <Spinner size="lg" />
+            </div>
+          )}
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
               <tr>
@@ -223,6 +241,13 @@ export default function ReconciliationPage() {
               ))}
             </tbody>
           </table>
+
+          <Pagination 
+            currentPage={pagination.page}
+            totalPages={pagination.pages}
+            onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+            isLoading={loading}
+          />
         </div>
       </div>
     </div>

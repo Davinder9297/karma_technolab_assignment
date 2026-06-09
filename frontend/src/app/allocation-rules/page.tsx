@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, History, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
 import api from "@/lib/api";
+import { DEFAULT_PAGE_LIMIT, LOOKUP_LIST_LIMIT } from "@/lib/constants";
 import { IncomeType, Bucket, AllocationRule, RuleType } from "@/types";
 import Modal from "@/components/ui/Modal";
+import Spinner from "@/components/ui/Spinner";
+import Pagination from "@/components/ui/Pagination";
 import { toast } from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
 import { clsx } from "clsx";
@@ -15,29 +18,42 @@ export default function AllocationRulesPage() {
   const [selectedType, setSelectedType] = useState<IncomeType | null>(null);
   const [rules, setRules] = useState<AllocationRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: DEFAULT_PAGE_LIMIT,
+    total: 0,
+    pages: 0
+  });
   
   // New rule form state
-  const [newRules, setNewRules] = useState<{ bucketId: string; ruleType: RuleType; value: number }[]>([
-    { bucketId: "", ruleType: RuleType.PERCENTAGE, value: 0 }
-  ]);
-  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [newRules, setNewRules] = useState<{ bucketId: string; ruleType: RuleType; value: number }[]>([]);
+  const [effectiveFrom, setEffectiveFrom] = useState("");
 
   useEffect(() => {
     fetchInitialData();
   }, []);
 
+  const handleOpenModal = () => {
+    // Always start with a clean state as requested
+    setNewRules([{ bucketId: "", ruleType: RuleType.PERCENTAGE, value: 0 }]);
+    setEffectiveFrom(new Date().toISOString().split('T')[0]);
+    setIsModalOpen(true);
+  };
+
   useEffect(() => {
     if (selectedType) {
-      fetchRules(selectedType._id);
+      fetchRules(selectedType._id, pagination.page);
     }
-  }, [selectedType]);
+  }, [selectedType, pagination.page]);
 
   const fetchInitialData = async () => {
+    setLoading(true);
     try {
       const [itRes, bRes] = await Promise.all([
-        api.get("/income-types"),
-        api.get("/buckets")
+        api.get(`/income-types?limit=${LOOKUP_LIST_LIMIT}`),
+        api.get(`/buckets?limit=${LOOKUP_LIST_LIMIT}`)
       ]);
       setIncomeTypes(itRes.data.data);
       setBuckets(bRes.data.data);
@@ -51,12 +67,16 @@ export default function AllocationRulesPage() {
     }
   };
 
-  const fetchRules = async (id: string) => {
+  const fetchRules = async (id: string, page: number) => {
+    setLoading(true);
     try {
-      const response = await api.get(`/allocation-rules/${id}`);
+      const response = await api.get(`/allocation-rules/${id}?page=${page}&limit=${pagination.limit}`);
       setRules(response.data.data);
+      setPagination(response.data.pagination);
     } catch (error) {
       toast.error("Failed to fetch rules");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,6 +110,7 @@ export default function AllocationRulesPage() {
       return;
     }
 
+    setSubmitting(true);
     try {
       // Convert user-friendly values to internal units before sending
       const processedRules = newRules.map(r => ({
@@ -105,9 +126,12 @@ export default function AllocationRulesPage() {
       toast.success("Rule version created successfully");
       setIsModalOpen(false);
       setNewRules([{ bucketId: "", ruleType: RuleType.PERCENTAGE, value: 0 }]);
-      fetchRules(selectedType._id);
+      fetchRules(selectedType._id, 1);
+      setPagination(prev => ({ ...prev, page: 1 }));
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to create rule");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -154,100 +178,115 @@ export default function AllocationRulesPage() {
             Rules for <span className="text-blue-600 font-bold">{selectedType?.name}</span>
           </h3>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenModal}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition-colors shadow-sm"
           >
             <Plus className="h-4 w-4 mr-2" /> New Version
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 relative min-h-[400px]">
+          {loading && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+              <Spinner size="lg" />
+            </div>
+          )}
           {rules.length === 0 ? (
             <div className="bg-white p-12 rounded-xl border border-dashed border-slate-300 text-center">
               <History className="h-12 w-12 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-500 font-medium">No rule versions found for this income type.</p>
               <button 
-                onClick={() => setIsModalOpen(true)}
+                onClick={handleOpenModal}
                 className="text-blue-600 font-semibold mt-2 hover:underline"
               >
                 Create the first version
               </button>
             </div>
           ) : (
-            rules.map((rule) => (
-              <div key={rule._id} className={clsx(
-                "bg-white rounded-xl border overflow-hidden shadow-sm",
-                rule.isActive ? "border-blue-200 ring-1 ring-blue-50" : "border-slate-200"
-              )}>
-                <div className={clsx(
-                  "px-6 py-4 flex items-center justify-between",
-                  rule.isActive ? "bg-blue-50/50" : "bg-slate-50"
-                )}>
-                  <div className="flex items-center space-x-4">
-                    <span className="bg-white border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold">
-                      V{rule.version}
-                    </span>
-                    <div className="text-sm">
-                      <p className="text-slate-500 text-xs uppercase font-bold tracking-wider">Effective From</p>
-                      <p className="font-semibold text-slate-700">{new Date(rule.effectiveFrom).toLocaleDateString()}</p>
+            <>
+              <div className="space-y-6">
+                {rules.map((rule) => (
+                  <div key={rule._id} className={clsx(
+                    "bg-white rounded-xl border overflow-hidden shadow-sm",
+                    rule.isActive ? "border-blue-200 ring-1 ring-blue-50" : "border-slate-200"
+                  )}>
+                    <div className={clsx(
+                      "px-6 py-4 flex items-center justify-between",
+                      rule.isActive ? "bg-blue-50/50" : "bg-slate-50"
+                    )}>
+                      <div className="flex items-center space-x-4">
+                        <span className="bg-white border border-slate-200 text-slate-700 px-2 py-1 rounded text-xs font-bold">
+                          V{rule.version}
+                        </span>
+                        <div className="text-sm">
+                          <p className="text-slate-500 text-xs uppercase font-bold tracking-wider">Effective From</p>
+                          <p className="font-semibold text-slate-700">{new Date(rule.effectiveFrom).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <Badge variant={rule.isActive ? "success" : "slate"}>
+                        {rule.isActive ? "Currently Active" : "Inactive"}
+                      </Badge>
                     </div>
-                  </div>
-                  <Badge variant={rule.isActive ? "success" : "slate"}>
-                    {rule.isActive ? "Currently Active" : "Inactive"}
-                  </Badge>
-                </div>
-                
-                <div className="p-6">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-slate-400 text-left border-b border-slate-100">
-                        <th className="pb-3 font-medium">Bucket</th>
-                        <th className="pb-3 font-medium">Type</th>
-                        <th className="pb-3 font-medium text-right">Value</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {rule.rules.map((r, i) => {
-                        const bucket = buckets.find(b => b._id === r.bucketId);
-                        return (
-                          <tr key={i}>
-                            <td className="py-3 font-medium text-slate-700">{bucket?.name || "Deleted Bucket"}</td>
-                            <td className="py-3 text-slate-500">{r.ruleType}</td>
-                            <td className="py-3 text-right font-bold text-slate-900">{formatRuleValue(r.ruleType, r.value)}</td>
+                    
+                    <div className="p-6">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-slate-400 text-left border-b border-slate-100">
+                            <th className="pb-3 font-medium">Bucket</th>
+                            <th className="pb-3 font-medium">Type</th>
+                            <th className="pb-3 font-medium text-right">Value</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {rule.rules.map((r, i) => {
+                            const bucket = buckets.find(b => b._id === r.bucketId);
+                            return (
+                              <tr key={i}>
+                                <td className="py-3 font-medium text-slate-700">{bucket?.name || "Deleted Bucket"}</td>
+                                <td className="py-3 text-slate-500">{r.ruleType}</td>
+                                <td className="py-3 text-right font-bold text-slate-900">{formatRuleValue(r.ruleType, r.value)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
 
-                  <div className="mt-6">
-                    <div className="flex justify-between items-end mb-2">
-                      <p className="text-xs font-bold text-slate-400 uppercase">Total Allocated</p>
-                      <p className={clsx(
-                        "text-sm font-bold",
-                        rule.totalPercentage > 100000 ? "text-red-600" : "text-blue-600"
-                      )}>
-                        {rule.totalPercentage / 1000}%
-                      </p>
-                    </div>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className={clsx(
-                          "h-full rounded-full transition-all duration-500",
-                          rule.totalPercentage > 100000 ? "bg-red-500" : "bg-blue-500"
+                      <div className="mt-6">
+                        <div className="flex justify-between items-end mb-2">
+                          <p className="text-xs font-bold text-slate-400 uppercase">Total Allocated</p>
+                          <p className={clsx(
+                            "text-sm font-bold",
+                            rule.totalPercentage > 100000 ? "text-red-600" : "text-blue-600"
+                          )}>
+                            {rule.totalPercentage / 1000}%
+                          </p>
+                        </div>
+                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={clsx(
+                              "h-full rounded-full transition-all duration-500",
+                              rule.totalPercentage > 100000 ? "bg-red-500" : "bg-blue-500"
+                            )}
+                            style={{ width: `${Math.min(rule.totalPercentage / 1000, 100)}%` }}
+                          />
+                        </div>
+                        {rule.totalPercentage < 100000 && (
+                          <p className="text-[10px] text-slate-400 mt-1 italic">
+                            * {(100000 - rule.totalPercentage) / 1000}% will remain unallocated
+                          </p>
                         )}
-                        style={{ width: `${Math.min(rule.totalPercentage / 1000, 100)}%` }}
-                      />
+                      </div>
                     </div>
-                    {rule.totalPercentage < 100000 && (
-                      <p className="text-[10px] text-slate-400 mt-1 italic">
-                        * {(100000 - rule.totalPercentage) / 1000}% will remain unallocated
-                      </p>
-                    )}
                   </div>
-                </div>
+                ))}
               </div>
-            ))
+              <Pagination 
+                currentPage={pagination.page}
+                totalPages={pagination.pages}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                isLoading={loading}
+              />
+            </>
           )}
         </div>
       </div>
@@ -334,9 +373,17 @@ export default function AllocationRulesPage() {
             </div>
             <button 
               type="submit"
-              className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-100"
+              disabled={submitting}
+              className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-100 disabled:opacity-50 flex items-center justify-center"
             >
-              Save New Version
+              {submitting ? (
+                <>
+                  <Spinner size="sm" light className="mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save New Version"
+              )}
             </button>
           </div>
         </form>

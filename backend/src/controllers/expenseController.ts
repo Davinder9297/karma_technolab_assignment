@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { expenseSchema, updateExpenseSchema } from "../validators";
 import { ExpenseService } from "../services/expenseService";
 import Expense from "../models/Expense";
-import { DEMO_USER_ID } from "../utils/constants";
+import { DEMO_USER_ID, DEFAULT_PAGE_LIMIT } from "../utils/constants";
 
 export class ExpenseController {
   static async create(req: Request, res: Response) {
@@ -26,7 +26,7 @@ export class ExpenseController {
 
   static async getAll(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 20, bucketId, startDate, endDate } = req.query;
+      const { page = 1, limit = DEFAULT_PAGE_LIMIT, bucketId, startDate, endDate } = req.query;
       const query: any = { userId: DEMO_USER_ID };
       
       if (bucketId) query.bucketId = bucketId;

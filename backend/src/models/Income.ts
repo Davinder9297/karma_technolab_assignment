@@ -3,6 +3,7 @@ import { IncomeStatus, RuleType } from "../types";
 
 export interface IIncomeAllocation {
   bucketId: mongoose.Types.ObjectId | null;
+  bucketName: string;
   amount: number;
   ruleType: RuleType;
   ruleValue: number;
@@ -25,6 +26,7 @@ export interface IIncome extends Document {
 
 const IncomeAllocationSchema = new Schema({
   bucketId: { type: Schema.Types.ObjectId, ref: "Bucket" },
+  bucketName: { type: String, required: true },
   amount: { type: Number, required: true },
   ruleType: { type: String, enum: Object.values(RuleType), required: true },
   ruleValue: { type: Number, required: true },
