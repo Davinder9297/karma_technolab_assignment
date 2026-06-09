@@ -1,0 +1,45 @@
+# Root .gitignore for Budget Allocation System
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env*
+
+# Utility & Documentation files (requested to ignore)
+budget-allocation-system-prompt.md
+requirements.txt
+
+# Scripts & Maintenance utilities (requested to ignore)
+backend/src/scripts/
+backend/src/dump_state.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
