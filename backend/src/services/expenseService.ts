@@ -64,15 +64,15 @@ export class ExpenseService {
     newAmount: number,
     newDescription: string
   ) {
-    // Note: Transactions are disabled for local development without replica sets.
-    // In production, use: const session = await mongoose.startSession(); session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     try {
       // 1. Find original expense
       const originalExpense = await Expense.findOne({
         _id: expenseId,
         userId
-      });
+      }).session(session);
 
       if (!originalExpense) throw new Error("Expense not found");
       if (originalExpense.status === ExpenseStatus.DELETED) {
@@ -86,12 +86,12 @@ export class ExpenseService {
       originalExpense.status = ExpenseStatus.UPDATED;
       originalExpense.description = newDescription;
       originalExpense.amount = newAmount;
-      await originalExpense.save();
+      await originalExpense.save({ session });
 
       const date = new Date();
 
       // 4. Create REVERSAL ledger entry
-      const currentBalanceBeforeReversal = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString());
+      const currentBalanceBeforeReversal = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString(), session);
       const balanceAfterReversal = currentBalanceBeforeReversal + originalAmount;
 
       const reversalEntry = new LedgerEntry({
@@ -106,7 +106,7 @@ export class ExpenseService {
         date,
         description: `Reversal for update: ${originalExpense.description}`,
       });
-      await reversalEntry.save();
+      await reversalEntry.save({ session });
 
       // Update balance for reversal
       await BalanceService.updateBalance(
@@ -116,11 +116,12 @@ export class ExpenseService {
         TransactionType.CREDIT,
         EntryType.REVERSAL,
         date,
-        reversalEntry._id as mongoose.Types.ObjectId
+        reversalEntry._id as mongoose.Types.ObjectId,
+        session
       );
 
       // 5. Create ADJUSTMENT ledger entry
-      const currentBalanceBeforeAdjustment = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString());
+      const currentBalanceBeforeAdjustment = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString(), session);
       const balanceAfterAdjustment = currentBalanceBeforeAdjustment - newAmount;
 
       const adjustmentEntry = new LedgerEntry({
@@ -135,7 +136,7 @@ export class ExpenseService {
         date,
         description: `Adjustment for update: ${newDescription}`,
       });
-      await adjustmentEntry.save();
+      await adjustmentEntry.save({ session });
 
       // Update balance for adjustment
       await BalanceService.updateBalance(
@@ -145,29 +146,37 @@ export class ExpenseService {
         TransactionType.DEBIT,
         EntryType.ADJUSTMENT,
         date,
-        adjustmentEntry._id as mongoose.Types.ObjectId
+        adjustmentEntry._id as mongoose.Types.ObjectId,
+        session
       );
 
+      await session.commitTransaction();
       return originalExpense;
     } catch (error) {
+      await session.abortTransaction();
       throw error;
+    } finally {
+      session.endSession();
     }
   }
 
   static async deleteExpense(userId: string, expenseId: string) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
       const expense = await Expense.findOne({
         _id: expenseId,
         userId,
         status: ExpenseStatus.ACTIVE,
-      });
+      }).session(session);
 
       if (!expense) throw new Error("Expense not found or not active");
 
       expense.status = ExpenseStatus.DELETED;
-      await expense.save();
+      await expense.save({ session });
 
-      const currentBalance = await BalanceService.getBalanceAfter(userId, expense.bucketId.toString());
+      const currentBalance = await BalanceService.getBalanceAfter(userId, expense.bucketId.toString(), session);
       const balanceAfter = currentBalance + expense.amount;
 
       const ledgerEntry = new LedgerEntry({
@@ -183,7 +192,7 @@ export class ExpenseService {
         description: `Reversal of expense: ${expense.description}`,
       });
 
-      await ledgerEntry.save();
+      await ledgerEntry.save({ session });
 
       await BalanceService.updateBalance(
         userId,
@@ -192,12 +201,17 @@ export class ExpenseService {
         TransactionType.CREDIT,
         EntryType.REVERSAL,
         new Date(),
-        ledgerEntry._id as mongoose.Types.ObjectId
+        ledgerEntry._id as mongoose.Types.ObjectId,
+        session
       );
 
+      await session.commitTransaction();
       return expense;
     } catch (error) {
+      await session.abortTransaction();
       throw error;
+    } finally {
+      session.endSession();
     }
   }
 }

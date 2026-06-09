@@ -78,11 +78,11 @@ export class ReconciliationService {
   }
 
   static async rebuildBalances(userId: string) {
-    // Note: Transactions are disabled for local development without replica sets.
-    // In production, use: const session = await mongoose.startSession(); session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     try {
-      const buckets = await Bucket.find({ userId });
+      const buckets = await Bucket.find({ userId }).session(session);
       
       for (const bucket of buckets) {
         const ledgerStats = await LedgerEntry.aggregate([
@@ -104,7 +104,7 @@ export class ReconciliationService {
               lastEntry: { $last: "$_id" }
             },
           },
-        ]);
+        ]).session(session);
 
         const stats = ledgerStats[0] || { totalCredits: 0, totalDebits: 0, lastEntry: null };
         const currentBalance = stats.totalCredits - stats.totalDebits;
@@ -120,7 +120,7 @@ export class ReconciliationService {
               lastLedgerEntryId: stats.lastEntry,
             },
           },
-          { upsert: true }
+          { upsert: true, session }
         );
       }
 
@@ -130,11 +130,15 @@ export class ReconciliationService {
       run.runType = "REBUILD";
       run.status = ReconciliationStatus.REBUILT;
       run.rebuiltAt = new Date();
-      await run.save();
+      await run.save({ session });
 
+      await session.commitTransaction();
       return run;
     } catch (error) {
+      await session.abortTransaction();
       throw error;
+    } finally {
+      session.endSession();
     }
   }
 }

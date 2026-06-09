@@ -7,8 +7,8 @@ import { DEMO_USER_ID } from "../utils/constants";
 
 export class BucketController {
   static async create(req: Request, res: Response) {
-    // Note: Transactions are disabled for local development without replica sets.
-    // In production, use: const session = await mongoose.startSession(); session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     try {
       const data = bucketSchema.parse(req.body);
@@ -16,7 +16,7 @@ export class BucketController {
         ...data,
         userId: DEMO_USER_ID,
       });
-      await bucket.save();
+      await bucket.save({ session });
 
       // Initialize balance
       const balance = new BucketBalance({
@@ -28,11 +28,15 @@ export class BucketController {
         currentBalance: 0,
         overspentAmount: 0
       });
-      await balance.save();
+      await balance.save({ session });
 
+      await session.commitTransaction();
       res.status(201).json({ success: true, data: bucket });
     } catch (error: any) {
+      await session.abortTransaction();
       res.status(400).json({ success: false, error: error.message });
+    } finally {
+      session.endSession();
     }
   }
 

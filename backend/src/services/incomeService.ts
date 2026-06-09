@@ -13,8 +13,8 @@ export class IncomeService {
     date: Date,
     description: string
   ) {
-    // Note: Transactions are disabled for local development without replica sets.
-    // In production, use: const session = await mongoose.startSession(); session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     try {
       // 1. Get Rule
@@ -42,13 +42,13 @@ export class IncomeService {
         })),
       });
 
-      await income.save();
+      await income.save({ session });
 
       // 4. Create Ledger Entries and Update Balances
       for (const split of splits) {
         if (!split.bucketId) continue;
 
-        const currentBalance = await BalanceService.getBalanceAfter(userId, split.bucketId);
+        const currentBalance = await BalanceService.getBalanceAfter(userId, split.bucketId, session);
         const balanceAfter = currentBalance + split.amount;
 
         const ledgerEntry = new LedgerEntry({
@@ -67,7 +67,7 @@ export class IncomeService {
           description: `Allocation from income: ${description || "No description"}`,
         });
 
-        await ledgerEntry.save();
+        await ledgerEntry.save({ session });
 
         await BalanceService.updateBalance(
           userId,
@@ -76,28 +76,36 @@ export class IncomeService {
           TransactionType.CREDIT,
           EntryType.ALLOCATION,
           date,
-          ledgerEntry._id as mongoose.Types.ObjectId
+          ledgerEntry._id as mongoose.Types.ObjectId,
+          session
         );
       }
 
+      await session.commitTransaction();
       return income;
     } catch (error) {
+      await session.abortTransaction();
       throw error;
+    } finally {
+      session.endSession();
     }
   }
 
   static async reverseIncome(userId: string, incomeId: string) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-      const income = await Income.findOne({ _id: incomeId, userId, status: IncomeStatus.ACTIVE });
+      const income = await Income.findOne({ _id: incomeId, userId, status: IncomeStatus.ACTIVE }).session(session);
       if (!income) throw new Error("Income not found or already reversed");
 
       income.status = IncomeStatus.REVERSED;
-      await income.save();
+      await income.save({ session });
 
       for (const allocation of income.allocations) {
         if (!allocation.bucketId) continue;
 
-        const currentBalance = await BalanceService.getBalanceAfter(userId, allocation.bucketId.toString());
+        const currentBalance = await BalanceService.getBalanceAfter(userId, allocation.bucketId.toString(), session);
         const balanceAfter = currentBalance - allocation.amount;
 
         const ledgerEntry = new LedgerEntry({
@@ -114,7 +122,7 @@ export class IncomeService {
           description: `Reversal of income: ${income.description || "No description"}`,
         });
 
-        await ledgerEntry.save();
+        await ledgerEntry.save({ session });
 
         await BalanceService.updateBalance(
           userId,
@@ -123,13 +131,18 @@ export class IncomeService {
           TransactionType.DEBIT,
           EntryType.REVERSAL,
           new Date(),
-          ledgerEntry._id as mongoose.Types.ObjectId
+          ledgerEntry._id as mongoose.Types.ObjectId,
+          session
         );
       }
 
+      await session.commitTransaction();
       return income;
     } catch (error) {
+      await session.abortTransaction();
       throw error;
+    } finally {
+      session.endSession();
     }
   }
 }
