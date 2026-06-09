@@ -77,7 +77,7 @@ export default function AllocationRulesPage() {
   const calculateTotalPercentage = () => {
     return newRules
       .filter(r => r.ruleType === RuleType.PERCENTAGE)
-      .reduce((sum, r) => sum + r.value, 0);
+      .reduce((sum, r) => sum + (r.value * 1000), 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,9 +91,15 @@ export default function AllocationRulesPage() {
     }
 
     try {
+      // Convert user-friendly values to internal units before sending
+      const processedRules = newRules.map(r => ({
+        ...r,
+        value: r.ruleType === RuleType.PERCENTAGE ? Math.round(r.value * 1000) : Math.round(r.value * 100)
+      }));
+
       await api.post("/allocation-rules", {
         incomeTypeId: selectedType._id,
-        rules: newRules,
+        rules: processedRules,
         effectiveFrom: new Date(effectiveFrom).toISOString()
       });
       toast.success("Rule version created successfully");
@@ -300,10 +306,11 @@ export default function AllocationRulesPage() {
                     </select>
                     <input
                       type="number"
-                      placeholder={rule.ruleType === RuleType.PERCENTAGE ? "Basis pts (1000=1%)" : "Paise"}
+                      step={rule.ruleType === RuleType.PERCENTAGE ? "0.01" : "0.01"}
+                      placeholder={rule.ruleType === RuleType.PERCENTAGE ? "Percentage (e.g. 10)" : "Amount (INR)"}
                       className="w-3/5 text-sm px-2 py-1.5 border border-slate-200 rounded outline-none"
                       value={rule.value || ""}
-                      onChange={(e) => updateRuleRow(index, "value", parseInt(e.target.value) || 0)}
+                      onChange={(e) => updateRuleRow(index, "value", parseFloat(e.target.value) || 0)}
                     />
                   </div>
                 </div>
