@@ -1,5 +1,6 @@
 # Dynamic Budget Allocation & Ledger Audit System
 
+
 A full-stack application designed to manage personal or business finances using a "Bucket" system with automated income allocation and a verifiable ledger audit trail.
 
 ## 🚀 Key Features
