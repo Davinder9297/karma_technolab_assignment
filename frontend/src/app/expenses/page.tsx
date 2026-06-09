@@ -1,21 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, Calendar, Receipt, Filter } from "lucide-react";
+import { Plus, Trash2, Edit2, Filter } from "lucide-react";
 import api from "@/lib/api";
 import { Expense, Bucket, ExpenseStatus } from "@/types";
 import { toast } from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
+import Modal from "@/components/ui/Modal";
 import { clsx } from "clsx";
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  
   const [formData, setFormData] = useState({
     bucketId: "",
     amount: "",
     date: new Date().toISOString().split('T')[0],
+    description: ""
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    amount: "",
     description: ""
   });
   const [filterBucket, setFilterBucket] = useState("");
@@ -79,6 +88,34 @@ export default function ExpensesPage() {
       fetchExpenses();
     } catch (error) {
       toast.error("Failed to delete expense");
+    }
+  };
+
+  const handleEditClick = (expense: Expense) => {
+    setEditingExpense(expense);
+    setEditFormData({
+      amount: (expense.amount / 100).toString(),
+      description: expense.description
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExpense) return;
+
+    try {
+      await api.patch(`/expenses/${editingExpense._id}`, {
+        amount: parseFloat(editFormData.amount),
+        description: editFormData.description
+      });
+      toast.success("Expense updated successfully");
+      setIsEditModalOpen(false);
+      fetchExpenses();
+      // Also refresh buckets for dashboard/balance updates
+      fetchInitialData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to update expense");
     }
   };
 
@@ -208,22 +245,70 @@ export default function ExpensesPage() {
                   <Badge variant={expense.status === ExpenseStatus.ACTIVE ? "danger" : "slate"}>
                     {expense.status}
                   </Badge>
+                  {expense.status === ExpenseStatus.UPDATED && (
+                    <span className="ml-2 text-[10px] font-bold text-amber-600 uppercase tracking-tighter">Edited</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-right">
-                  {expense.status === ExpenseStatus.ACTIVE && (
-                    <button 
-                      onClick={() => handleDelete(expense._id)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  <div className="flex justify-end space-x-2">
+                    {expense.status !== ExpenseStatus.DELETED && (
+                      <>
+                        <button 
+                          onClick={() => handleEditClick(expense)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(expense._id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <Modal 
+        isOpen={isEditModalOpen} 
+        onClose={() => setIsEditModalOpen(false)} 
+        title="Edit Expense"
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <input 
+              type="text" 
+              required
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              value={editFormData.description}
+              onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Amount (INR)</label>
+            <input 
+              type="number" 
+              required
+              step="0.01"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              value={editFormData.amount}
+              onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
+            />
+          </div>
+          <button 
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors mt-4"
+          >
+            Update Expense
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }

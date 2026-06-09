@@ -61,70 +61,94 @@ export class ExpenseService {
   static async updateExpense(
     userId: string,
     expenseId: string,
-    newAmount?: number,
-    newDescription?: string,
-    newDate?: Date
+    newAmount: number,
+    newDescription: string
   ) {
+    // Note: Transactions are disabled for local development without replica sets.
+    // In production, use: const session = await mongoose.startSession(); session.startTransaction();
+
     try {
+      // 1. Find original expense
       const originalExpense = await Expense.findOne({
         _id: expenseId,
-        userId,
-        status: ExpenseStatus.ACTIVE,
+        userId
       });
 
-      if (!originalExpense) throw new Error("Expense not found or not active");
-
-      const amountDiff = (newAmount !== undefined ? newAmount : originalExpense.amount) - originalExpense.amount;
-      
-      const updatedExpense = new Expense({
-        userId,
-        bucketId: originalExpense.bucketId,
-        amount: newAmount !== undefined ? newAmount : originalExpense.amount,
-        date: newDate || originalExpense.date,
-        description: newDescription || originalExpense.description,
-        status: ExpenseStatus.ACTIVE,
-        originalExpenseId: originalExpense._id,
-      });
-
-      await updatedExpense.save();
-
-      originalExpense.status = ExpenseStatus.UPDATED;
-      await originalExpense.save();
-
-      if (amountDiff !== 0) {
-        const transactionType = amountDiff > 0 ? TransactionType.DEBIT : TransactionType.CREDIT;
-        const absDiff = Math.abs(amountDiff);
-        
-        const currentBalance = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString());
-        const balanceAfter = currentBalance + (amountDiff > 0 ? -absDiff : absDiff);
-
-        const ledgerEntry = new LedgerEntry({
-          userId,
-          bucketId: originalExpense.bucketId,
-          referenceId: updatedExpense._id,
-          referenceModel: "Expense",
-          transactionType,
-          entryType: EntryType.ADJUSTMENT,
-          amount: absDiff,
-          balanceAfter,
-          date: new Date(),
-          description: `Adjustment for expense: ${originalExpense.description}`,
-        });
-
-        await ledgerEntry.save();
-
-        await BalanceService.updateBalance(
-          userId,
-          originalExpense.bucketId.toString(),
-          absDiff,
-          transactionType,
-          EntryType.ADJUSTMENT,
-          new Date(),
-          ledgerEntry._id as mongoose.Types.ObjectId
-        );
+      if (!originalExpense) throw new Error("Expense not found");
+      if (originalExpense.status === ExpenseStatus.DELETED) {
+        throw new Error("Cannot edit a deleted expense");
       }
 
-      return updatedExpense;
+      // 2. Get original amount (in paise)
+      const originalAmount = originalExpense.amount;
+
+      // 3. Update original expense doc
+      originalExpense.status = ExpenseStatus.UPDATED;
+      originalExpense.description = newDescription;
+      originalExpense.amount = newAmount;
+      await originalExpense.save();
+
+      const date = new Date();
+
+      // 4. Create REVERSAL ledger entry
+      const currentBalanceBeforeReversal = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString());
+      const balanceAfterReversal = currentBalanceBeforeReversal + originalAmount;
+
+      const reversalEntry = new LedgerEntry({
+        userId,
+        bucketId: originalExpense.bucketId,
+        referenceId: originalExpense._id,
+        referenceModel: "Expense",
+        transactionType: TransactionType.CREDIT,
+        entryType: EntryType.REVERSAL,
+        amount: originalAmount,
+        balanceAfter: balanceAfterReversal,
+        date,
+        description: `Reversal for update: ${originalExpense.description}`,
+      });
+      await reversalEntry.save();
+
+      // Update balance for reversal
+      await BalanceService.updateBalance(
+        userId,
+        originalExpense.bucketId.toString(),
+        originalAmount,
+        TransactionType.CREDIT,
+        EntryType.REVERSAL,
+        date,
+        reversalEntry._id as mongoose.Types.ObjectId
+      );
+
+      // 5. Create ADJUSTMENT ledger entry
+      const currentBalanceBeforeAdjustment = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString());
+      const balanceAfterAdjustment = currentBalanceBeforeAdjustment - newAmount;
+
+      const adjustmentEntry = new LedgerEntry({
+        userId,
+        bucketId: originalExpense.bucketId,
+        referenceId: originalExpense._id,
+        referenceModel: "Expense",
+        transactionType: TransactionType.DEBIT,
+        entryType: EntryType.ADJUSTMENT,
+        amount: newAmount,
+        balanceAfter: balanceAfterAdjustment,
+        date,
+        description: `Adjustment for update: ${newDescription}`,
+      });
+      await adjustmentEntry.save();
+
+      // Update balance for adjustment
+      await BalanceService.updateBalance(
+        userId,
+        originalExpense.bucketId.toString(),
+        newAmount,
+        TransactionType.DEBIT,
+        EntryType.ADJUSTMENT,
+        date,
+        adjustmentEntry._id as mongoose.Types.ObjectId
+      );
+
+      return originalExpense;
     } catch (error) {
       throw error;
     }

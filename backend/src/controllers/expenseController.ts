@@ -64,15 +64,17 @@ export class ExpenseController {
       const { id } = req.params;
       const data = updateExpenseSchema.parse(req.body);
       
-      const amountPaise = data.amount !== undefined ? Math.round(data.amount * 100) : undefined;
-      const date = data.date ? new Date(data.date) : undefined;
+      if (data.amount === undefined || data.description === undefined) {
+        throw new Error("Amount and description are required for update");
+      }
+
+      const amountPaise = Math.round(data.amount * 100);
 
       const expense = await ExpenseService.updateExpense(
         DEMO_USER_ID,
         id,
         amountPaise,
-        data.description,
-        date
+        data.description
       );
 
       res.json({ success: true, data: expense });

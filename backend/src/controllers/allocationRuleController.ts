@@ -7,8 +7,8 @@ import { RuleType } from "../types";
 
 export class AllocationRuleController {
   static async create(req: Request, res: Response) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // Note: Transactions are disabled for local development without replica sets.
+    // In production, use: const session = await mongoose.startSession(); session.startTransaction();
 
     try {
       const data = allocationRuleSchema.parse(req.body);
@@ -19,7 +19,7 @@ export class AllocationRuleController {
         userId: DEMO_USER_ID,
         incomeTypeId: data.incomeTypeId,
         effectiveFrom: effectiveFrom
-      }).session(session);
+      });
 
       if (existingConflict) {
         throw new Error(`A rule version already exists with effective date ${existingConflict.effectiveFrom.toLocaleDateString()}. Please choose a different date.`);
@@ -30,12 +30,12 @@ export class AllocationRuleController {
         userId: DEMO_USER_ID,
         incomeTypeId: data.incomeTypeId,
         isActive: true
-      }).session(session);
+      });
 
       if (currentRule) {
         currentRule.isActive = false;
         currentRule.effectiveTo = effectiveFrom;
-        await currentRule.save({ session });
+        await currentRule.save();
       }
 
       const version = currentRule ? currentRule.version + 1 : 1;
@@ -61,15 +61,11 @@ export class AllocationRuleController {
         createdBy: DEMO_USER_ID
       });
 
-      await newRule.save({ session });
+      await newRule.save();
       
-      await session.commitTransaction();
       res.status(201).json({ success: true, data: newRule });
     } catch (error: any) {
-      await session.abortTransaction();
       res.status(400).json({ success: false, error: error.message });
-    } finally {
-      session.endSession();
     }
   }
 
