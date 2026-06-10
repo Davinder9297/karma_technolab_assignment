@@ -62,23 +62,35 @@ export class ExpenseService {
     userId: string,
     expenseId: string,
     newAmount: number,
-    newDescription: string
+    newDescription: string,
+    newDate?: Date
   ) {
+    // 1. Find original expense
+    const originalExpense = await Expense.findOne({
+      _id: expenseId,
+      userId
+    });
+
+    if (!originalExpense) throw new Error("Expense not found");
+    if (originalExpense.status === ExpenseStatus.DELETED) {
+      throw new Error("Cannot edit a deleted expense");
+    }
+
+    const amountChanged = newAmount !== originalExpense.amount;
+
+    if (!amountChanged) {
+      // SCENARIO A: Only non-financial fields changed
+      originalExpense.description = newDescription;
+      if (newDate) originalExpense.date = newDate;
+      await originalExpense.save();
+      return originalExpense;
+    }
+
+    // SCENARIO B: Amount changed - Run full audit flow
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // 1. Find original expense
-      const originalExpense = await Expense.findOne({
-        _id: expenseId,
-        userId
-      }).session(session);
-
-      if (!originalExpense) throw new Error("Expense not found");
-      if (originalExpense.status === ExpenseStatus.DELETED) {
-        throw new Error("Cannot edit a deleted expense");
-      }
-
       // 2. Get original amount (in paise)
       const originalAmount = originalExpense.amount;
 
@@ -86,9 +98,10 @@ export class ExpenseService {
       originalExpense.status = ExpenseStatus.UPDATED;
       originalExpense.description = newDescription;
       originalExpense.amount = newAmount;
+      if (newDate) originalExpense.date = newDate;
       await originalExpense.save({ session });
 
-      const date = new Date();
+      const auditDate = new Date();
 
       // 4. Create REVERSAL ledger entry
       const currentBalanceBeforeReversal = await BalanceService.getBalanceAfter(userId, originalExpense.bucketId.toString(), session);
@@ -103,7 +116,7 @@ export class ExpenseService {
         entryType: EntryType.REVERSAL,
         amount: originalAmount,
         balanceAfter: balanceAfterReversal,
-        date,
+        date: auditDate,
         description: `Reversal for update: ${originalExpense.description}`,
       });
       await reversalEntry.save({ session });
@@ -115,7 +128,7 @@ export class ExpenseService {
         originalAmount,
         TransactionType.CREDIT,
         EntryType.REVERSAL,
-        date,
+        auditDate,
         reversalEntry._id as mongoose.Types.ObjectId,
         session
       );
@@ -133,7 +146,7 @@ export class ExpenseService {
         entryType: EntryType.ADJUSTMENT,
         amount: newAmount,
         balanceAfter: balanceAfterAdjustment,
-        date,
+        date: auditDate,
         description: `Adjustment for update: ${newDescription}`,
       });
       await adjustmentEntry.save({ session });
@@ -145,7 +158,7 @@ export class ExpenseService {
         newAmount,
         TransactionType.DEBIT,
         EntryType.ADJUSTMENT,
-        date,
+        auditDate,
         adjustmentEntry._id as mongoose.Types.ObjectId,
         session
       );
