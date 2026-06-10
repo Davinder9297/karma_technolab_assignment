@@ -13,6 +13,12 @@ export const bucketSchema = z.object({
   description: z.string().optional(),
 });
 
+export const updateBucketSchema = z.object({
+  name: z.string().min(1, "Name is required").optional(),
+  description: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
 export const allocationRuleSchema = z.object({
   incomeTypeId: objectIdSchema,
   rules: z.array(z.object({
