@@ -62,6 +62,8 @@ export class ExpenseController {
   static async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      if (!id) throw new Error("Expense ID is required");
+      
       const data = updateExpenseSchema.parse(req.body);
       
       if (data.amount === undefined || data.description === undefined) {
@@ -72,7 +74,7 @@ export class ExpenseController {
 
       const expense = await ExpenseService.updateExpense(
         DEMO_USER_ID,
-        id,
+        id as string,
         amountPaise,
         data.description
       );
@@ -86,7 +88,8 @@ export class ExpenseController {
   static async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const expense = await ExpenseService.deleteExpense(DEMO_USER_ID, id);
+      if (!id) throw new Error("Expense ID is required");
+      const expense = await ExpenseService.deleteExpense(DEMO_USER_ID, id as string);
       res.json({ success: true, data: expense });
     } catch (error: any) {
       res.status(400).json({ success: false, error: error.message });

@@ -44,7 +44,11 @@ cd budget-allocation-system
 cd backend
 npm install
 ```
-Create a `.env` file in the `backend` directory:
+Copy `.env.example` to `.env` and adjust if needed:
+```bash
+cp .env.example .env
+```
+Default `.env` values:
 ```env
 MONGODB_URI=mongodb://localhost:27017/budget_system
 DEMO_USER_ID=64f1a2b3c4d5e6f7a8b9c0d1
@@ -62,7 +66,15 @@ npm run seed
 cd ../frontend
 npm install
 ```
-The frontend is configured to connect to `http://localhost:5000/api` by default.
+Copy `.env.example` to `.env.local` and adjust if needed:
+```bash
+cp .env.example .env.local
+```
+Default `.env.local` value:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+```
+The frontend uses `NEXT_PUBLIC_API_URL` to connect to the backend.
 
 ---
 

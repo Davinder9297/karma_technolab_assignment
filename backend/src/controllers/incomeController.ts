@@ -80,7 +80,8 @@ export class IncomeController {
   static async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const income = await IncomeService.reverseIncome(DEMO_USER_ID, id);
+      if (!id) throw new Error("Income ID is required");
+      const income = await IncomeService.reverseIncome(DEMO_USER_ID, id as string);
       res.json({ success: true, data: income });
     } catch (error: any) {
       res.status(400).json({ success: false, error: error.message });

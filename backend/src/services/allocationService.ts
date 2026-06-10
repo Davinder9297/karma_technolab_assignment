@@ -40,7 +40,7 @@ export class AllocationService {
     const bucketIds = rule.rules.map((r: any) => r.bucketId.toString());
     const uniqueBucketIds = [...new Set(bucketIds)];
     const buckets = await Bucket.find({ 
-      _id: { $in: uniqueBucketIds },
+      _id: { $in: uniqueBucketIds as string[] },
       userId,
       isActive: true 
     });
@@ -48,7 +48,7 @@ export class AllocationService {
     const bucketMap = new Map(buckets.map((b) => [b._id.toString(), b.name]));
 
     // Check for missing or inactive buckets
-    const missingBucketIds = uniqueBucketIds.filter(id => !bucketMap.has(id));
+    const missingBucketIds = (uniqueBucketIds as string[]).filter(id => !bucketMap.has(id));
     if (missingBucketIds.length > 0) {
       throw new Error(`One or more buckets in the allocation rule are inactive or deleted: ${missingBucketIds.join(", ")}`);
     }
