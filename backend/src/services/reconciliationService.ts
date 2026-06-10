@@ -127,10 +127,20 @@ export class ReconciliationService {
       // Run reconciliation after rebuild
       const now = new Date();
       const run = await this.runReconciliation(userId, now.getFullYear(), now.getMonth() + 1);
-      run.runType = "REBUILD";
-      run.status = ReconciliationStatus.REBUILT;
-      run.rebuiltAt = new Date();
-      await run.save({ session });
+      
+      // Fetch the document again to ensure we have a fresh instance from the session if needed
+      // or just update it via findOneAndUpdate to avoid version conflicts/document not found errors
+      await ReconciliationRun.updateOne(
+        { _id: run._id },
+        { 
+          $set: { 
+            runType: "REBUILD",
+            status: ReconciliationStatus.REBUILT,
+            rebuiltAt: new Date()
+          } 
+        },
+        { session }
+      );
 
       await session.commitTransaction();
       return run;

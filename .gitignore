@@ -23,6 +23,7 @@ build/
 budget-allocation-system-prompt.md
 requirements.txt
 test-scenarios.md
+TEST_REPORT.md
 
 # Scripts & Maintenance utilities (requested to ignore)
 backend/src/scripts/
