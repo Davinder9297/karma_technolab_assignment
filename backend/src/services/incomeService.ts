@@ -11,8 +11,27 @@ export class IncomeService {
     incomeTypeId: string,
     amountPaise: number,
     date: Date,
-    description: string
+    description: string,
+    force: boolean = false
   ) {
+    // 0. Check for duplicate if force is not true
+    if (!force) {
+      const duplicateQuery = {
+        userId: new mongoose.Types.ObjectId(userId),
+        incomeTypeId: new mongoose.Types.ObjectId(incomeTypeId),
+        amount: amountPaise,
+        date: new Date(date),
+        description,
+        status: IncomeStatus.ACTIVE
+      };
+      
+      const duplicate = await Income.findOne(duplicateQuery);
+
+      if (duplicate) {
+        throw new Error("Potential duplicate income detected. Use 'force' flag to submit anyway.");
+      }
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 

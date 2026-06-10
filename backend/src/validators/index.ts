@@ -29,6 +29,7 @@ export const incomeSchema = z.object({
   amount: z.number().positive("Amount must be positive"), // In Rupees, will be converted to paise
   date: z.string().datetime().or(z.coerce.date()),
   description: z.string().optional(),
+  force: z.boolean().optional(),
 });
 
 export const expenseSchema = z.object({

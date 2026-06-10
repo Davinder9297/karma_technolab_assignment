@@ -15,7 +15,8 @@ export class IncomeController {
         data.incomeTypeId,
         amountPaise,
         new Date(data.date),
-        data.description || ""
+        data.description || "",
+        data.force
       );
 
       res.status(201).json({ success: true, data: income });

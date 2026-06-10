@@ -55,22 +55,20 @@ export class AllocationService {
 
     // 1. Apply FIXED rules
     for (const r of fixedRules) {
-      const allocated = Math.min(remainingAmount, r.value);
-      if (allocated > 0) {
-        allocations.push({
-          bucketId: r.bucketId.toString(),
-          bucketName: bucketMap.get(r.bucketId.toString()) || "Unknown",
-          amount: allocated,
-          amountINR: allocated / 100,
-          ruleType: RuleType.FIXED,
-          ruleValue: r.value,
-        });
-        remainingAmount -= allocated;
+      if (remainingAmount < r.value) {
+        throw new Error(`Income amount is insufficient for fixed allocation to bucket: ${bucketMap.get(r.bucketId.toString())}`);
       }
-    }
-
-    if (fixedRules.length > 0 && remainingAmount < 0) {
-      throw new Error("Fixed allocations exceed total income amount");
+      
+      const allocated = r.value;
+      allocations.push({
+        bucketId: r.bucketId.toString(),
+        bucketName: bucketMap.get(r.bucketId.toString()) || "Unknown",
+        amount: allocated,
+        amountINR: allocated / 100,
+        ruleType: RuleType.FIXED,
+        ruleValue: r.value,
+      });
+      remainingAmount -= allocated;
     }
 
     // 2. Apply PERCENTAGE rules
