@@ -66,6 +66,7 @@ export interface Income {
   date: string;
   description?: string;
   status: IncomeStatus;
+  allocationRuleVersion: number;
   allocations: {
     bucketId: string | null;
     bucketName: string;
