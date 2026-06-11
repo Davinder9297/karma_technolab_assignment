@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Edit2 } from "lucide-react";
 import api from "@/lib/api";
 import { DEFAULT_PAGE_LIMIT } from "@/lib/constants";
 import { Bucket } from "@/types";
@@ -58,19 +58,6 @@ export default function BucketsPage() {
     }
   };
 
-  const toggleActive = async (id: string, currentStatus: boolean) => {
-    setLoading(true);
-    try {
-      await api.patch(`/buckets/${id}`, { isActive: !currentStatus });
-      toast.success("Status updated");
-      fetchBuckets(pagination.page);
-    } catch (error) {
-      toast.error("Failed to update status");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const formatCurrency = (paise: number) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -104,7 +91,6 @@ export default function BucketsPage() {
               <th className="px-6 py-4">Name</th>
               <th className="px-6 py-4">Description</th>
               <th className="px-6 py-4">Current Balance</th>
-              <th className="px-6 py-4 text-center">Status</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -117,17 +103,6 @@ export default function BucketsPage() {
                   <span className={bucket.balance?.currentBalance && bucket.balance.currentBalance < 0 ? "text-red-600 font-semibold" : "text-green-600 font-semibold"}>
                     {formatCurrency(bucket.balance?.currentBalance || 0)}
                   </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex justify-center">
-                    <button onClick={() => toggleActive(bucket._id, bucket.isActive)}>
-                      {bucket.isActive ? (
-                        <ToggleRight className="h-6 w-6 text-blue-600" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6 text-slate-400" />
-                      )}
-                    </button>
-                  </div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end space-x-2">

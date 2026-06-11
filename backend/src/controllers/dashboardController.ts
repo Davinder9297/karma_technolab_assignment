@@ -2,7 +2,9 @@ import { Request, Response } from "express";
 import Bucket from "../models/Bucket";
 import BucketBalance from "../models/BucketBalance";
 import MonthlyBucketSummary from "../models/MonthlyBucketSummary";
+import Income from "../models/Income";
 import { DEMO_USER_ID } from "../utils/constants";
+import { IncomeStatus } from "../types";
 
 export class DashboardController {
   static async getBuckets(req: Request, res: Response) {
@@ -54,7 +56,18 @@ export class DashboardController {
         });
       }
 
-      res.json({ success: true, data: dashboardData });
+      // Calculate total unallocated balance
+      const activeIncomes = await Income.find({ userId: DEMO_USER_ID, status: IncomeStatus.ACTIVE });
+      let totalUnallocated = 0;
+      for (const income of activeIncomes) {
+        for (const allocation of income.allocations) {
+          if (allocation.bucketId === null) {
+            totalUnallocated += allocation.amount;
+          }
+        }
+      }
+
+      res.json({ success: true, data: { buckets: dashboardData, totalUnallocated } });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

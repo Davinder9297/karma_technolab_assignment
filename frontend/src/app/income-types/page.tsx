@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit2, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Edit2 } from "lucide-react";
 import api from "@/lib/api";
 import { DEFAULT_PAGE_LIMIT } from "@/lib/constants";
 import { IncomeType } from "@/types";
@@ -57,19 +57,6 @@ export default function IncomeTypesPage() {
     }
   };
 
-  const toggleActive = async (id: string, currentStatus: boolean) => {
-    setLoading(true);
-    try {
-      await api.patch(`/income-types/${id}`, { isActive: !currentStatus });
-      toast.success("Status updated");
-      fetchIncomeTypes(pagination.page);
-    } catch (error) {
-      toast.error("Failed to update status");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -95,7 +82,6 @@ export default function IncomeTypesPage() {
             <tr>
               <th className="px-6 py-4">Name</th>
               <th className="px-6 py-4">Description</th>
-              <th className="px-6 py-4 text-center">Status</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -104,17 +90,6 @@ export default function IncomeTypesPage() {
               <tr key={type._id} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4 font-medium text-slate-900">{type.name}</td>
                 <td className="px-6 py-4 text-slate-500">{type.description || "-"}</td>
-                <td className="px-6 py-4">
-                  <div className="flex justify-center">
-                    <button onClick={() => toggleActive(type._id, type.isActive)}>
-                      {type.isActive ? (
-                        <ToggleRight className="h-6 w-6 text-blue-600" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6 text-slate-400" />
-                      )}
-                    </button>
-                  </div>
-                </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end space-x-2">
                     <button className="p-1 text-slate-400 hover:text-blue-600">

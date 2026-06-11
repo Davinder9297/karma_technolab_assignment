@@ -113,6 +113,11 @@ export interface DashboardBucket {
   thisMonth: { credits: number; debits: number; netChange: number };
 }
 
+export interface DashboardData {
+  buckets: DashboardBucket[];
+  totalUnallocated: number;
+}
+
 export interface ReconciliationRun {
   _id: string;
   year: number;

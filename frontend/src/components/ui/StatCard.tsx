@@ -10,7 +10,7 @@ interface StatCardProps {
     value: number;
     isPositive: boolean;
   };
-  color?: "blue" | "green" | "red" | "amber" | "slate";
+  color?: "blue" | "green" | "red" | "amber" | "slate" | "purple";
 }
 
 const colors = {
@@ -19,18 +19,19 @@ const colors = {
   red: "bg-red-50 text-red-600 border-red-100",
   amber: "bg-amber-50 text-amber-600 border-amber-100",
   slate: "bg-slate-50 text-slate-600 border-slate-100",
+  purple: "bg-purple-50 text-purple-600 border-purple-100",
 };
 
 export default function StatCard({ title, value, icon: Icon, description, trend, color = "blue" }: StatCardProps) {
   return (
-    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <div className={clsx("p-2 rounded-lg border", colors[color])}>
-          <Icon className="h-6 w-6" />
+    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <div className={clsx("p-1.5 rounded-lg border", colors[color])}>
+          <Icon className="h-5 w-5" />
         </div>
         {trend && (
           <span className={clsx(
-            "text-sm font-medium",
+            "text-xs font-medium",
             trend.isPositive ? "text-green-600" : "text-red-600"
           )}>
             {trend.isPositive ? "+" : "-"}{trend.value}%
@@ -38,9 +39,9 @@ export default function StatCard({ title, value, icon: Icon, description, trend,
         )}
       </div>
       <div>
-        <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">{title}</p>
-        <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
-        {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{title}</p>
+        <h3 className="text-xl font-bold text-slate-900 mt-1">{value}</h3>
+        {description && <p className="text-xs text-slate-500 mt-1">{description}</p>}
       </div>
     </div>
   );
